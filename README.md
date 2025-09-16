@@ -1,2 +1,1 @@
-# DataWipe
-A secure data wiping tool.
+"# Secure Data Wiper" 
