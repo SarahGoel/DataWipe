@@ -35,7 +35,7 @@ class Landing(QWidget):
         l=QVBoxLayout(); l.addStretch()
         l.addWidget(QLabel("<h1>🔒 Secure Data Wiper</h1>"))
         l.addWidget(QLabel("Select device → Wipe → Verify → Certificate"))
-        btn=StyledButton("Start Wiping", "fa.play")
+        btn=StyledButton("Start Wiping", "fa5s.play")
         btn.clicked.connect(lambda: parent.nav("devices"))
         l.addWidget(btn); l.addStretch(); self.setLayout(l)
 
@@ -45,8 +45,8 @@ class Devices(QWidget):
         l=QVBoxLayout(); self.listw=QListWidget()
         l.addWidget(QLabel("<b>Detected Drives</b>")); l.addWidget(self.listw)
         hb=QHBoxLayout()
-        hb.addWidget(StyledButton("Refresh", "fa.sync"))
-        nxt=StyledButton("Next →", "fa.arrow-right")
+        hb.addWidget(StyledButton("Refresh", "fa5s.sync"))
+        nxt=StyledButton("Next →", "fa5s.arrow-right")
         nxt.clicked.connect(lambda: parent.nav("options")); hb.addStretch(); hb.addWidget(nxt)
         l.addLayout(hb); self.setLayout(l); self.refresh()
 
@@ -66,8 +66,8 @@ class Options(QWidget):
         self.methods=QListWidget()
         for m in ["Quick","NIST 800-88","DoD 5220.22-M","Gutmann","Crypto-Erase"]: self.methods.addItem(m)
         l.addWidget(self.methods); self.hash=QCheckBox("Generate SHA-256 Report"); l.addWidget(self.hash)
-        hb=QHBoxLayout(); hb.addWidget(StyledButton("← Back","fa.arrow-left"))
-        start=StyledButton("Start Wipe","fa.play"); start.clicked.connect(self.start); hb.addStretch(); hb.addWidget(start)
+        hb=QHBoxLayout();         hb.addWidget(StyledButton("← Back","fa5s.arrow-left"))
+        start=StyledButton("Start Wipe","fa5s.play"); start.clicked.connect(self.start); hb.addStretch(); hb.addWidget(start)
         l.addLayout(hb); self.setLayout(l)
     def start(self):
         self.parent.nav("progress"); self.parent.widgets["progress"].simulate()
@@ -78,7 +78,7 @@ class Progress(QWidget):
         l=QVBoxLayout(); l.addWidget(QLabel("<b>Progress</b>"))
         self.bar=QProgressBar(); l.addWidget(self.bar)
         self.log=QTextEdit(); self.log.setReadOnly(True); l.addWidget(self.log)
-        cancel=StyledButton("Cancel","fa.times"); cancel.clicked.connect(self.cancel); l.addWidget(cancel); self.setLayout(l)
+        cancel=StyledButton("Cancel","fa5s.times"); cancel.clicked.connect(self.cancel); l.addWidget(cancel); self.setLayout(l)
     def simulate(self):
         self.bar.setValue(0); self.log.clear()
         def run():
@@ -92,8 +92,8 @@ class Complete(QWidget):
     def __init__(self,parent):
         super().__init__(); l=QVBoxLayout()
         l.addWidget(QLabel("<h2>✅ Wipe Complete</h2>"))
-        dl=StyledButton("Download Report","fa.file-pdf-o"); l.addWidget(dl)
-        home=StyledButton("Back Home","fa.home"); home.clicked.connect(lambda: parent.nav("home")); l.addWidget(home)
+        dl=StyledButton("Download Report","fa5s.file-pdf"); l.addWidget(dl)
+        home=StyledButton("Back Home","fa5s.home"); home.clicked.connect(lambda: parent.nav("home")); l.addWidget(home)
         self.setLayout(l)
 
 class Reports(QWidget):
