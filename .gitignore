@@ -21,8 +21,9 @@ wheels/
 *.egg
 MANIFEST
 
-# Virtual Environment
+# Virtual environments
 venv/
+venv_new/
 env/
 ENV/
 env.bak/
@@ -49,37 +50,57 @@ node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-.npm
-.yarn-integrity
-
-# React/Vite
-frontend/web/dist/
-frontend/web/build/
-frontend/web/.vite/
-
-# Logs
-logs/
-*.log
 
 # Database
 *.db
 *.sqlite
 *.sqlite3
 
-# Certificates (keep structure but ignore sensitive files)
-certificates/keys/
-certificates/*.pem
-certificates/*.key
-certificates/*.crt
+# Logs
+*.log
+logs/
+
+# Keys and certificates
+keys/
+*.pem
+*.key
+*.crt
+*.p12
+
+# Reports
+reports/
+certificates/
 
 # Temporary files
 *.tmp
 *.temp
-.cache/
+*.bak
 
-# Environment variables
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# Environments
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
