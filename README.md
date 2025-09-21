@@ -108,4 +108,4 @@ The frontend will run at: [http://localhost:5173](http://localhost:5173)
 ## 📄 License
 
 Licensed under the **GPL-3.0 License**.
-[View License](https://www.gnu.org/licenses/gpl-3.0)
+[View License](https://github.com/SarahGoel/ZeroTrace?tab=GPL-3.0-1-ov-file)
