@@ -1,0 +1,9 @@
+body { margin:0; font-family: 'Segoe UI', sans-serif; background:#f5f7fa; }
+header { background:#0b66c3; color:white; padding:16px; }
+main { padding:20px; }
+button { background:#0b66c3; color:white; border:none; padding:8px 12px; margin:4px; border-radius:6px; cursor:pointer; }
+button:hover { background:#094d94; }
+.card { background:white; padding:16px; border-radius:8px; box-shadow:0 2px 4px rgba(0,0,0,.1); margin-bottom:12px; }
+.table { border-collapse:collapse; width:100%; }
+.table th, .table td { border:1px solid #ddd; padding:8px; }
+.table th { background:#eaf1fb; }
