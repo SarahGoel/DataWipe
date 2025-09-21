@@ -26,53 +26,20 @@ A comprehensive secure data wiping tool built for **trustworthy IT asset recycli
 
 ### 📊 Advanced Features
 - **Real-time Progress**: Live progress tracking with time estimates
-- **Digital Certificates**: Tamper-proof PDF reports with digital signatures
+- **Tamper-proof Certificates**: PDF and JSON certificates with digital signatures
+- **Certificate Viewer**: Interactive certificate display and verification
 - **Audit Logging**: Comprehensive activity logging for compliance
 - **Device Detection**: Automatic device type detection and information gathering
 - **Error Handling**: Robust error recovery and user feedback
+- **Dark Mode**: Modern UI with light/dark theme support
 
 ### 🎨 Modern Interface
-- **React Frontend**: Responsive, modern web interface
-- **FastAPI Backend**: High-performance async API
-- **Real-time Updates**: WebSocket-based progress updates
+- **React Frontend**: Responsive, modern web interface with Vite
+- **FastAPI Backend**: High-performance async API with automatic documentation
+- **Real-time Updates**: Live progress tracking and status updates
 - **Mobile Friendly**: Responsive design for all devices
+- **Professional UI**: Polished interface with animations and transitions
 
-## 📂 Repository Structure
-
-```
-ZeroTrace/
-├── backend/                 # Python FastAPI backend
-│   ├── models.py           # SQLAlchemy database models
-│   ├── database.py         # Database connection and operations
-│   ├── main.py             # FastAPI application entry point
-│   ├── routes/             # API route definitions
-│   │   └── api.py          # Main API endpoints
-│   ├── services/           # Core business logic
-│   │   ├── secure_wipe.py  # Main wipe service
-│   │   ├── wipe_methods.py # Specific wipe implementations
-│   │   └── wipe_engine.py  # Wipe orchestration
-│   └── utils/              # Utility functions
-│       └── report.py       # PDF report generation
-├── frontend/               # React frontend
-│   └── web/               # Vite React application
-│       ├── src/
-│       │   ├── App.jsx    # Main application component
-│       │   ├── App.css    # Application styles
-│       │   └── components/ # React components
-│       │       ├── DeviceList.jsx    # Device selection
-│       │       ├── WipeOptions.jsx   # Method selection
-│       │       ├── WipeProgress.jsx  # Progress tracking
-│       │       └── Reports.jsx       # Report management
-│       ├── package.json   # Node.js dependencies
-│       └── vite.config.js # Vite configuration
-├── certificates/           # SSL/TLS certificates
-├── data/                  # SQLite database files
-├── reports/               # Generated PDF reports
-├── keys/                  # Cryptographic keys
-├── run.py                 # Unified startup script
-├── requirements.txt       # Python dependencies
-└── README.md             # This file
-```
 
 ## ⚙️ Installation & Setup
 
@@ -86,10 +53,10 @@ ZeroTrace/
 ### Quick Start
 
 1. **Clone the repository**
-   ```bash
-   git clone https://github.com/SarahGoel/ZeroTrace.git
-   cd ZeroTrace
-   ```
+```bash
+git clone https://github.com/SarahGoel/ZeroTrace.git
+cd ZeroTrace
+```
 
 2. **Quick Setup (Recommended)**
    ```bash
@@ -158,6 +125,61 @@ npm run dev
 - **DoD 5220.22-M**: Department of Defense data sanitization
 - **Cryptographic Erasure**: Key destruction for SSDs
 - **Digital Signatures**: Tamper-proof report verification
+
+## 📂 Repository Structure
+
+```
+ZeroTrace/
+├── backend/                 # Python FastAPI backend
+│   ├── __init__.py
+│   ├── database.py         # Database operations and models
+│   ├── main.py             # FastAPI application entry point
+│   ├── models.py           # SQLAlchemy database models
+│   ├── routes/             # API route definitions
+│   │   ├── __init__.py
+│   │   └── api.py          # Main API endpoints
+│   ├── services/           # Core business logic
+│   │   ├── secure_wipe.py  # Secure wipe service
+│   │   ├── wipe_engine.py  # Wipe orchestration
+│   │   └── wipe_methods.py # Wipe method implementations
+│   └── utils/              # Utility functions
+│       ├── certificate_generator.py  # Certificate generation
+│       └── report.py       # Report utilities
+├── frontend/               # React frontend
+│   └── web/                # Vite React application
+│       ├── node_modules/   # Node.js dependencies (auto-generated)
+│       ├── package.json    # Node.js dependencies
+│       ├── package-lock.json # Dependency lock file
+│       ├── vite.config.js  # Vite configuration
+│       └── src/            # React source code
+│           ├── App.jsx     # Main application component
+│           ├── App.css     # Main application styles
+│           ├── index.css   # Base styles
+│           ├── main.jsx    # Application entry point
+│           └── components/ # React components
+│               ├── CertificateViewer.jsx  # Certificate display
+│               ├── DeviceList.jsx        # Device selection
+│               ├── Reports.jsx           # Report management
+│               ├── WipeOptions.jsx       # Method selection
+│               └── WipeProgress.jsx      # Progress tracking
+├── demo_script.py          # Demo presentation script
+├── demo_setup.py           # Demo setup script
+├── run.py                  # Unified application launcher
+├── requirements.txt        # Python dependencies
+├── README.md               # Project documentation
+├── PRESENTATION_GUIDE.md   # Presentation guide
+├── LICENSE                 # License file
+└── .gitignore             # Git ignore rules
+```
+
+### 📁 Directory Descriptions
+
+- **`backend/`**: Complete Python FastAPI backend with database models, API routes, and business logic
+- **`frontend/web/`**: React application built with Vite for modern development experience
+- **`backend/services/`**: Core wiping logic with support for multiple security standards
+- **`backend/utils/`**: Utility functions for certificate generation and report creation
+- **`backend/routes/`**: RESTful API endpoints for frontend communication
+- **`frontend/web/src/components/`**: Modular React components for different UI sections
 
 ## 📜 Usage Guide
 
