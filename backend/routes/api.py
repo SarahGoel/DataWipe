@@ -8,7 +8,8 @@ import logging
 
 from services.wipe_engine import list_drives, initiate_wipe
 from database import get_db_session, get_wipe_history, get_session_progress, log_audit_event
-from models import WipeMethod, WipeStatus
+from models import WipeMethod, WipeStatus, WipeSession
+from pathlib import Path
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -16,6 +17,11 @@ logger = logging.getLogger(__name__)
 class WipeRequest(BaseModel):
     device: str
     method: str
+    passes: int = 1
+    force: bool = False
+
+class FileWipeRequest(BaseModel):
+    path: str
     passes: int = 1
     force: bool = False
 
@@ -43,6 +49,10 @@ class WipeSessionResponse(BaseModel):
     error_message: Optional[str]
     report_path: Optional[str]
     signature_path: Optional[str]
+
+class VerifyRequest(BaseModel):
+    file_path: str
+    embedded_pdf: bool = False
 
 @router.get("/drives")
 def api_list_drives():
@@ -82,6 +92,46 @@ def api_wipe(req: WipeRequest, background_tasks: BackgroundTasks):
         logger.error(f"Wipe operation failed: {e}")
         log_audit_event("wipe_failed", "device", req.device, 
                        details=f"error={str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/wipe-file")
+def api_wipe_file(req: FileWipeRequest):
+    """Securely wipe a single file using NIST Clear (overwrite+delete) and generate certificates"""
+    if not req.force:
+        raise HTTPException(status_code=400, detail="force=True required for destructive operations")
+    if not os.path.exists(req.path) or not os.path.isfile(req.path):
+        raise HTTPException(status_code=404, detail="File not found")
+
+    try:
+        from services.wipe_methods import WipeMethods
+        from utils.report import generate_pdf_report, generate_json_report
+        import time
+
+        methods = WipeMethods(os.name)
+        start_ts = time.time()
+        sha_before = None
+        # Head hash before wipe
+        try:
+            with open(req.path, 'rb') as f:
+                sha_before = __import__('hashlib').sha256(f.read(1024 * 1024)).hexdigest()
+        except Exception:
+            sha_before = None
+
+        result = {"success": False}
+        def progress(pct, msg):
+            logger.info(f"File wipe progress: {pct}% - {msg}")
+        methods.wipe_file_clear(req.path, max(1, min(req.passes, 3)), progress)
+        success = True
+        end_ts = time.time()
+
+        # After wipe, file is deleted; sha_after is None
+        sha_after = None
+        pdf = generate_pdf_report("file:" + req.path, "nist_800_88", max(1, min(req.passes, 3)), sha_before, sha_after, "completed" if success else "failed", start_ts, end_ts)
+        _ = generate_json_report("file:" + req.path, "nist_800_88", max(1, min(req.passes, 3)), sha_before, sha_after, "completed" if success else "failed", start_ts, end_ts)
+
+        return {"success": success, "report": pdf}
+    except Exception as e:
+        logger.error(f"File wipe failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/wipe/{session_id}/progress")
@@ -255,14 +305,42 @@ def api_download_json_report(session_id: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/reports/verify")
-def api_verify_certificate(file_path: str):
+def api_verify_certificate(req: VerifyRequest):
     """Verify certificate authenticity"""
     try:
         from utils.report import verify_certificate
+        from pyhanko.sign.validation import validate_pdf_signature
+        from pyhanko_certvalidator.context import ValidationContext
         
+        file_path = req.file_path
         if not os.path.exists(file_path):
             raise HTTPException(status_code=404, detail="File not found")
         
+        # If PDF, try verifying embedded signature first
+        if req.embedded_pdf and file_path.lower().endswith('.pdf'):
+            try:
+                vc = ValidationContext(allow_fetching=True)
+                with open(file_path, 'rb') as f:
+                    from pyhanko.sign.general import load_pdf
+                    pdf = load_pdf(f)
+                # Validate all signature fields; succeed if any is valid
+                from pyhanko.sign.fields import enumerate_sig_fields
+                fields = list(enumerate_sig_fields(pdf))
+                results = []
+                for field_name, _ in fields:
+                    vr = validate_pdf_signature(pdf, field_name, validation_context=vc)
+                    results.append({
+                        'field': field_name,
+                        'intact': vr.modification_level.value == 'UNMODIFIED',
+                        'trusted': vr.trust_established,
+                    })
+                if results:
+                    any_valid = any(r['intact'] and r['trusted'] for r in results)
+                    return {"valid": any_valid, "details": results}
+            except Exception as e:
+                logger.warning(f"Embedded PDF signature validation failed: {e}")
+
+        # Fallback: detached .sig/.p7s JSON/PDF verification
         result = verify_certificate(file_path)
         return result
     except HTTPException:
@@ -288,7 +366,8 @@ def api_list_certificates():
                 "type": "PDF",
                 "size": stat.st_size,
                 "created": datetime.fromtimestamp(stat.st_ctime).isoformat(),
-                "modified": datetime.fromtimestamp(stat.st_mtime).isoformat()
+                "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                "download_url": f"/reports/{file_path.name}"
             })
         
         for file_path in reports_dir.glob("*.json"):
@@ -299,7 +378,8 @@ def api_list_certificates():
                 "type": "JSON",
                 "size": stat.st_size,
                 "created": datetime.fromtimestamp(stat.st_ctime).isoformat(),
-                "modified": datetime.fromtimestamp(stat.st_mtime).isoformat()
+                "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                "download_url": f"/reports/{file_path.name}"
             })
         
         # Sort by creation time (newest first)

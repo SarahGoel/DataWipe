@@ -11,6 +11,7 @@ import secrets
 from typing import Optional, Dict, Any, Callable
 from enum import Enum
 import logging
+from .wipe_methods import WipeMethods
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,7 @@ class SecureWipeService:
         self.is_windows = self.system == "windows"
         self.is_linux = self.system == "linux"
         self.is_macos = self.system == "darwin"
+        self._wipe_methods = WipeMethods(self.system)
         
     def detect_device_type(self, device_path: str) -> str:
         """Detect device type (HDD, SSD, NVMe, USB)"""
@@ -200,21 +202,21 @@ class SecureWipeService:
         
         try:
             if method == WipeMethod.CRYPTO_ERASE:
-                result = self._crypto_erase(device_path, device_type, progress_callback)
+                result = self._wipe_methods.crypto_erase(device_path, device_type, progress_callback)
             elif method == WipeMethod.ATA_SANITIZE:
-                result = self._ata_sanitize(device_path, progress_callback)
+                result = self._wipe_methods._ata_sanitize(device_path, progress_callback)
             elif method == WipeMethod.NVME_FORMAT:
-                result = self._nvme_format(device_path, progress_callback)
+                result = self._wipe_methods._nvme_format(device_path, progress_callback)
             elif method == WipeMethod.NIST_800_88:
-                result = self._nist_800_88_wipe(device_path, passes, progress_callback)
+                result = self._wipe_methods.nist_800_88_wipe(device_path, passes, progress_callback)
             elif method == WipeMethod.DOD_5220_22_M:
-                result = self._dod_5220_22_m_wipe(device_path, passes, progress_callback)
+                result = self._wipe_methods.dod_5220_22_m_wipe(device_path, passes, progress_callback)
             elif method == WipeMethod.GUTMANN:
-                result = self._gutmann_wipe(device_path, progress_callback)
+                result = self._wipe_methods.gutmann_wipe(device_path, progress_callback)
             elif method == WipeMethod.SINGLE_PASS:
-                result = self._single_pass_wipe(device_path, progress_callback)
+                result = self._wipe_methods.single_pass_wipe(device_path, progress_callback)
             elif method == WipeMethod.THREE_PASS:
-                result = self._three_pass_wipe(device_path, progress_callback)
+                result = self._wipe_methods.three_pass_wipe(device_path, progress_callback)
             else:
                 raise ValueError(f"Unsupported wipe method: {method}")
             

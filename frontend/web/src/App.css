@@ -28,9 +28,10 @@
   --dark-bg-primary: #1a202c;
   --dark-bg-secondary: #2d3748;
   --dark-bg-tertiary: #4a5568;
-  --dark-text-primary: #f7fafc;
-  --dark-text-secondary: #e2e8f0;
-  --dark-text-muted: #a0aec0;
+  /* Increase contrast for better readability in dark mode */
+  --dark-text-primary: #f9fafb;   /* very light gray */
+  --dark-text-secondary: #e5e7eb; /* lighter gray */
+  --dark-text-muted: #d1d5db;     /* medium-light gray */
   --dark-border-color: #4a5568;
   --dark-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
   --dark-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.2);
@@ -64,6 +65,11 @@ body {
   --border-color: var(--dark-border-color);
   --shadow: var(--dark-shadow);
   --shadow-lg: var(--dark-shadow-lg);
+}
+
+/* Ensure full-viewport dark background */
+.app.dark-mode, .app.dark-mode .app-main, .app.dark-mode body {
+  background: var(--dark-bg-primary) !important;
 }
 
 .app-header {
@@ -929,10 +935,6 @@ body {
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin: 0 auto 1rem;
-}
-
-.spinning-icon {
-  animation: spin 1s linear infinite;
 }
 
 @keyframes spin {

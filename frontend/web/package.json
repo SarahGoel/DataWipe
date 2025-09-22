@@ -2,11 +2,13 @@
   "name": "web",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "electron-main.js",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --host 127.0.0.1 --port 5173",
     "build": "vite build",
-    "preview": "vite preview",
+    "preview": "vite preview --host 127.0.0.1 --port 4173",
+    "electron": "cross-env NODE_ENV=development electron .",
+    "electron:build": "cross-env NODE_ENV=production electron .",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -20,6 +22,8 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^5.0.3",
-    "vite": "^7.1.6"
+    "vite": "^7.1.6",
+    "electron": "^32.2.0",
+    "cross-env": "^7.0.3"
   }
 }

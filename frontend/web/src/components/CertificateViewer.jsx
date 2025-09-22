@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { FaFilePdf, FaDownload, FaShieldAlt, FaCheckCircle, FaTimesCircle, FaArrowLeft, FaEye, FaCode } from 'react-icons/fa';
 
-const API_BASE_URL = 'http://localhost:8000/api';
+const API_BASE_URL = '/api';
+const BACKEND_BASE_URL = '';
 
 function CertificateViewer({ certificate, onBack }) {
   const [certificateData, setCertificateData] = useState(null);

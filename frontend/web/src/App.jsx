@@ -7,7 +7,7 @@ import CertificateViewer from './components/CertificateViewer';
 import { FaHome, FaDatabase, FaFilePdf, FaCog, FaHistory, FaMoon, FaSun, FaShieldAlt } from 'react-icons/fa';
 import './App.css';
 
-const API_BASE_URL = 'http://localhost:8000/api';
+const API_BASE_URL = '/api';
 
 function Home() {
   return (

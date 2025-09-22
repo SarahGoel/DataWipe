@@ -26,6 +26,10 @@ from cryptography.hazmat.primitives.serialization import load_pem_private_key
 from cryptography.hazmat.backends import default_backend
 
 import logging
+from pyhanko.sign import signers
+from pyhanko_certvalidator.context import ValidationContext
+from pyhanko import stamp
+from pyhanko.pdf_utils.incremental_writer import IncrementalPdfFileWriter
 
 logger = logging.getLogger(__name__)
 
@@ -467,29 +471,27 @@ class CertificateGenerator:
             return f"{secs}s"
     
     def _sign_pdf(self, filepath: str):
-        """Sign PDF with digital signature"""
+        """Sign PDF with digital signature using PyHanko (detached signature saved as .p7s)"""
         try:
-            # This is a simplified signature - in production, use PyHanko for proper PDF signing
-            signature_file = f"{filepath}.sig"
+            # Prepare signer from PEM key and self-signed certificate
+            with open(self.private_key_path, 'rb') as key_f, open(self.certificate_path, 'rb') as cert_f:
+                signer = signers.SimpleSigner.load(key_f.read(), cert_f.read(), key_passphrase=None)
+
+            with open(filepath, 'rb') as inf:
+                w = IncrementalPdfFileWriter(inf)
+                meta = signers.PdfSignatureMetadata(field_name='ZeroTraceSignature', md_algorithm='sha256')
+                pdf_signer = signers.PdfSigner(meta, signer)
+                with open(filepath, 'wb') as outf:
+                    pdf_signer.sign_pdf(w, output=outf)
+
+            # Also export detached CMS signature for external verification
             with open(filepath, 'rb') as f:
                 content = f.read()
-            
-            # Generate signature
-            signature = self.private_key.sign(
-                content,
-                padding.PSS(
-                    mgf=padding.MGF1(hashes.SHA256()),
-                    salt_length=padding.PSS.MAX_LENGTH
-                ),
-                hashes.SHA256()
-            )
-            
-            # Save signature
-            with open(signature_file, 'wb') as f:
-                f.write(signature)
-            
-            logger.info(f"PDF signed: {signature_file}")
-            
+            cms = signer.sign(content, 'sha256')
+            with open(f"{filepath}.p7s", 'wb') as sigf:
+                sigf.write(cms.dump())
+
+            logger.info(f"PDF signed with PyHanko: {filepath} (.p7s saved)")
         except Exception as e:
             logger.error(f"Failed to sign PDF: {e}")
     

@@ -1,9 +1,10 @@
-body { margin:0; font-family: 'Segoe UI', sans-serif; background:#f5f7fa; }
-header { background:#0b66c3; color:white; padding:16px; }
+html, body, #root { height: 100%; }
+body { margin:0; font-family: 'Segoe UI', sans-serif; background: var(--bg-secondary); color: var(--text-primary); }
+header { background: var(--primary-color); color: white; padding:16px; }
 main { padding:20px; }
-button { background:#0b66c3; color:white; border:none; padding:8px 12px; margin:4px; border-radius:6px; cursor:pointer; }
-button:hover { background:#094d94; }
-.card { background:white; padding:16px; border-radius:8px; box-shadow:0 2px 4px rgba(0,0,0,.1); margin-bottom:12px; }
-.table { border-collapse:collapse; width:100%; }
-.table th, .table td { border:1px solid #ddd; padding:8px; }
-.table th { background:#eaf1fb; }
+button { background: var(--primary-color); color:white; border:none; padding:8px 12px; margin:4px; border-radius:6px; cursor:pointer; }
+button:hover { background: var(--primary-dark); }
+.card { background: var(--bg-primary); padding:16px; border-radius:8px; box-shadow:0 2px 4px rgba(0,0,0,.1); margin-bottom:12px; border: 1px solid var(--border-color); }
+.table { border-collapse:collapse; width:100%; background: var(--bg-primary); color: var(--text-primary); }
+.table th, .table td { border:1px solid var(--border-color); padding:8px; }
+.table th { background: var(--bg-secondary); }

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { FaFilePdf, FaDownload, FaHistory, FaRefresh, FaExclamationTriangle } from 'react-icons/fa';
+import { FaFilePdf, FaDownload, FaHistory, FaSyncAlt, FaExclamationTriangle } from 'react-icons/fa';
 
-const API_BASE_URL = 'http://localhost:8000/api';
+const API_BASE_URL = '/api';
+const BACKEND_BASE_URL = '';
 
 function Reports({ onBack, onViewCertificate }) {
   const [sessions, setSessions] = useState([]);
@@ -85,7 +86,7 @@ function Reports({ onBack, onViewCertificate }) {
       case 'failed':
         return <FaExclamationTriangle className="error-icon" />;
       case 'in_progress':
-        return <FaRefresh className="spinning-icon" />;
+        return <FaSyncAlt className="spinning-icon" />;
       default:
         return <FaHistory className="info-icon" />;
     }
@@ -138,7 +139,7 @@ function Reports({ onBack, onViewCertificate }) {
           <FaExclamationTriangle className="error-icon"/>
           <p>{error}</p>
           <button onClick={loadSessions} className="retry-button">
-            <FaRefresh/> Retry
+            <FaSyncAlt/> Retry
           </button>
         </div>
       </div>
@@ -278,7 +279,7 @@ function Reports({ onBack, onViewCertificate }) {
                     <FaFilePdf/> View
                   </button>
                   <button 
-                    onClick={() => window.open(`${API_BASE_URL}/reports/${cert.path}`, '_blank')}
+                    onClick={() => window.open(`/reports/${cert.filename}`, '_blank')}
                     className="download-button"
                   >
                     <FaDownload/> Download
@@ -304,7 +305,7 @@ function Reports({ onBack, onViewCertificate }) {
           ← Back
         </button>
         <button onClick={() => { loadSessions(); loadCertificates(); }} className="secondary-button">
-          <FaRefresh/> Refresh
+          <FaSyncAlt/> Refresh
         </button>
       </div>
     </div>

@@ -225,6 +225,67 @@ class WipeMethods:
             progress_callback(100, "Three pass wipe completed")
         
         return {"method": "three_pass", "success": True}
+
+    def wipe_file_clear(self, file_path: str, passes: int = 1,
+                        progress_callback: Optional[Callable] = None) -> Dict[str, Any]:
+        """Securely overwrite a file and delete it (NIST Clear)."""
+        try:
+            file_size = os.path.getsize(file_path)
+            chunk_size = 1024 * 1024
+
+            def _write_pattern_stream(byte_source: Optional[bytes], message: str, offset_pct: int, max_pct: int):
+                processed = 0
+                if progress_callback:
+                    progress_callback(offset_pct, message)
+                with open(file_path, 'r+b') as f:
+                    while processed < file_size:
+                        to_write = min(chunk_size, file_size - processed)
+                        if byte_source is None:
+                            data = os.urandom(to_write)
+                        else:
+                            if len(byte_source) == 1:
+                                data = byte_source * to_write
+                            else:
+                                repeats = to_write // len(byte_source) + 1
+                                data = (byte_source * repeats)[:to_write]
+                        f.write(data)
+                        f.flush()
+                        os.fsync(f.fileno())
+                        processed += to_write
+                        if progress_callback and file_size > 0:
+                            pct = offset_pct + int((processed / file_size) * (max_pct - offset_pct))
+                            progress_callback(min(pct, max_pct), message)
+
+            # Passes: zeros, ones, random (based on requested passes)
+            patterns = []
+            if passes >= 1:
+                patterns.append((b'\x00', "Writing zeros...", 0, 60 if passes == 1 else 33))
+            if passes >= 2:
+                patterns.append((b'\xFF', "Writing ones...", 33, 66))
+            if passes >= 3:
+                patterns.append((None, "Writing random data...", 66, 99))
+
+            if not patterns:
+                patterns = [(b'\x00', "Writing zeros...", 0, 99)]
+
+            for byte_source, message, start_pct, end_pct in patterns:
+                _write_pattern_stream(byte_source, message, start_pct, end_pct)
+
+            # Truncate and delete
+            if progress_callback:
+                progress_callback(99, "Truncating and deleting file...")
+            with open(file_path, 'r+b') as f:
+                f.truncate(0)
+                f.flush()
+                os.fsync(f.fileno())
+            os.remove(file_path)
+
+            if progress_callback:
+                progress_callback(100, "File wipe completed")
+            return {"method": "file_clear", "success": True}
+        except Exception as e:
+            logger.error(f"File wipe failed: {e}")
+            raise
     
     def _secure_overwrite(self, device_path: str, passes: int, 
                          progress_callback: Optional[Callable] = None,

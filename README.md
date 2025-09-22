@@ -1,12 +1,62 @@
 # 🔐 ZeroTrace – Secure Data Wiping Tool
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-![Python](https://img.shields.io/badge/Python-3.8+-blue)
-![React](https://img.shields.io/badge/React-18.2.0-blue)
+![Python](https://img.shields.io/badge/Python-3.11+-blue)
+![React](https://img.shields.io/badge/React-18+-blue)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115.0-green)
 ![NIST](https://img.shields.io/badge/NIST-800--88-compliant-orange)
 
-A comprehensive secure data wiping tool built for **trustworthy IT asset recycling**, ensuring irreversible deletion of sensitive information from storage devices. Developed for **Smart India Hackathon 2025** (SIH25070).
+ZeroTrace is a secure data wiping tool with a FastAPI backend and a modern React (Vite) frontend. It generates tamper‑proof wipe certificates and includes an Electron desktop shell for presentations.
+
+## ⚡ Quick Start (Presentation)
+
+- One‑command runner (builds web, runs backend, opens browser):
+```powershell
+cd C:\Users\Shikkha\ZeroTrace
+./run_presentation.ps1
+```
+If PowerShell blocks scripts:
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+./run_presentation.ps1
+```
+App: http://127.0.0.1:8000 • API docs: http://127.0.0.1:8000/docs
+
+- Safe wipe demo (generates certificate):
+```powershell
+$demo = "$env:TEMP\zerotrace_demo.txt"
+'Demo content' | Out-File -Encoding utf8 $demo
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/api/wipe-file -ContentType application/json -Body (@{ path = $demo; passes = 1; force = $true } | ConvertTo-Json)
+```
+Then open Certificates in the app.
+
+## 🧑‍💻 Manual Setup (if needed)
+
+- Backend deps:
+```powershell
+cd backend
+python -m pip install -r ..\requirements.txt
+```
+- Frontend build:
+```powershell
+cd frontend\web
+"C:\Program Files\nodejs\npm.cmd" install
+"C:\Program Files\nodejs\npm.cmd" run build
+```
+- Run backend (serves built web at /):
+```powershell
+cd ..\..\backend
+python -m uvicorn main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+- Electron desktop window (dev, optional):
+```powershell
+cd frontend\web
+"C:\Program Files\nodejs\npm.cmd" run dev
+"C:\Program Files\nodejs\npm.cmd" run electron
+```
+
+---
 
 ## 🚀 Features
 
@@ -58,12 +108,7 @@ git clone https://github.com/SarahGoel/ZeroTrace.git
 cd ZeroTrace
 ```
 
-2. **Quick Setup (Recommended)**
-   ```bash
-   python demo_setup.py
-   ```
-
-3. **Manual Installation**
+2. **Manual Installation**
    ```bash
    # Install Python dependencies
    pip install -r requirements.txt
@@ -77,15 +122,36 @@ cd ZeroTrace
    python run.py
    ```
 
-4. **Access the application**
+3. **Access the application**
    - Frontend: http://localhost:5173
    - Backend API: http://localhost:8000
    - API Documentation: http://localhost:8000/docs
 
 ### 🎬 Demo Mode
-For presentations and demonstrations:
+For presentations, simply run backend + web or the Electron wrapper as below.
+
+### Desktop App (PyQt)
 ```bash
-python demo_script.py
+python desktop/app.py
+```
+
+### Electron Wrapper (optional)
+```bash
+cd frontend/web
+npm run electron
+```
+
+### Packaging
+- Desktop (Windows):
+  ```bash
+  pip install pyinstaller
+  pyinstaller --onefile --windowed desktop/app.py -n ZeroTraceDesktop
+  ```
+- Electron (production):
+```bash
+  cd frontend/web
+  npm run build
+  npm run electron:build
 ```
 
 ### Manual Setup
