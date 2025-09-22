@@ -95,10 +95,8 @@ cd frontend\web
 
 ### Prerequisites
 
-- **Python 3.8+** (3.11+ recommended)
-- **Node.js 16+** (18+ recommended)
-- **npm** or **yarn**
-- **Administrator/Root privileges** (for device access)
+- None. The guide below installs everything for you on Windows, macOS, and Linux.
+  - For device wiping, run shells as Administrator (Windows) or with sudo (Linux/macOS).
 
 ### Quick Start
 
@@ -108,24 +106,44 @@ git clone https://github.com/SarahGoel/ZeroTrace.git
 cd ZeroTrace
 ```
 
-2. **Manual Installation**
-   ```bash
-   # Install Python dependencies
-   pip install -r requirements.txt
-   
-   # Install Node.js dependencies
-   cd frontend/web
-   npm install
-   cd ../..
-   
-   # Start both backend and frontend
-   python run.py
-   ```
+2. **One-line setup and run (Windows PowerShell)**
+```powershell
+# Installs Python if missing, Node if missing, pip deps, builds web, and starts backend
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass; \
+if (-not (Get-Command python -ErrorAction SilentlyContinue)) { winget install -e --id Python.Python.3 --accept-package-agreements --accept-source-agreements }; \
+if (-not (Get-Command node -ErrorAction SilentlyContinue)) { winget install -e --id OpenJS.NodeJS.LTS --accept-package-agreements --accept-source-agreements }; \
+python -m pip install --upgrade pip; \
+python -m pip install -r requirements.txt; \
+pushd frontend/web; npm install; npm run build; popd; \
+python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
+```
 
-3. **Access the application**
-   - Frontend: http://localhost:5173
-   - Backend API: http://localhost:8000
-   - API Documentation: http://localhost:8000/docs
+3. **One-line setup and run (macOS/Linux bash)**
+```bash
+# Requires sudo for package managers where needed
+if ! command -v python3 >/dev/null 2>&1; then \
+  if command -v brew >/dev/null 2>&1; then brew install python; \
+  elif command -v apt >/dev/null 2>&1; then sudo apt update && sudo apt install -y python3 python3-pip; \
+  elif command -v dnf >/dev/null 2>&1; then sudo dnf install -y python3 python3-pip; \
+  elif command -v pacman >/dev/null 2>&1; then sudo pacman -S --noconfirm python python-pip; \
+  fi; \
+fi; \
+if ! command -v node >/dev/null 2>&1; then \
+  if command -v brew >/dev/null 2>&1; then brew install node; \
+  elif command -v apt >/dev/null 2>&1; then curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash - && sudo apt install -y nodejs; \
+  elif command -v dnf >/dev/null 2>&1; then sudo dnf module enable -y nodejs:18 && sudo dnf install -y nodejs; \
+  elif command -v pacman >/dev/null 2>&1; then sudo pacman -S --noconfirm nodejs npm; \
+  fi; \
+fi; \
+python3 -m pip install --upgrade pip; \
+python3 -m pip install -r requirements.txt; \
+pushd frontend/web && npm install && npm run build && popd; \
+python3 -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
+```
+
+4. **Access the application**
+   - App (served by backend): http://127.0.0.1:8000
+   - API Documentation: http://127.0.0.1:8000/docs
 
 ### 🎬 Demo Mode
 For presentations, simply run backend + web or the Electron wrapper as below.
@@ -158,9 +176,8 @@ npm run electron
 
 #### Backend Only
 ```bash
-cd backend
-pip install -r ../requirements.txt
-python main.py
+pip install -r requirements.txt
+python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 #### Frontend Only

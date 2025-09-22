@@ -1,5 +1,6 @@
 ﻿import subprocess
 import time
+from datetime import datetime
 import hashlib
 import platform
 import logging
@@ -7,7 +8,8 @@ from typing import Dict, Any, List, Optional, Callable
 from database import init_database, get_db_session, create_device, get_device_by_path, create_wipe_session, update_wipe_session, add_progress_update
 from services.secure_wipe import SecureWipeService, WipeMethod
 from services.wipe_methods import WipeMethods
-from utils.report import generate_pdf_report, sign_report_with_openssl
+from utils.report import generate_pdf_report, sign_report_with_openssl, generate_json_report
+from models import WipeStatus
 
 # Initialize database
 init_database()
@@ -243,8 +245,12 @@ def initiate_wipe(device: str, method: str, passes: int = 1, force: bool = False
     # Get initial hash
     sha_before = _sha256_head(device)
     
-    # Update session status
-    update_wipe_session(session.id, status="in_progress", started_at=time.time())
+    # Update session status using proper enum and datetime
+    update_wipe_session(
+        session.id,
+        status=WipeStatus.IN_PROGRESS,
+        started_at=datetime.utcnow()
+    )
     
     try:
         # Perform the wipe
@@ -255,11 +261,11 @@ def initiate_wipe(device: str, method: str, passes: int = 1, force: bool = False
         # Get final hash
         sha_after = _sha256_head(device)
         
-        # Update session with results
+        # Update session with results using enum and datetime
         update_wipe_session(
             session.id,
-            status="completed" if result["success"] else "failed",
-            completed_at=time.time(),
+            status=WipeStatus.COMPLETED if result["success"] else WipeStatus.FAILED,
+            completed_at=datetime.utcnow(),
             duration_seconds=result.get("duration", 0),
             sha_before=sha_before,
             sha_after=sha_after,
@@ -267,16 +273,18 @@ def initiate_wipe(device: str, method: str, passes: int = 1, force: bool = False
         )
         
         # Generate reports
+        end_ts = time.time()
+        start_ts = end_ts - result.get("duration", 0)
         report_path = generate_pdf_report(
             device, method, passes, sha_before, sha_after,
             "completed" if result["success"] else "failed",
-            time.time() - result.get("duration", 0), time.time()
+            start_ts, end_ts
         )
         
         json_report_path = generate_json_report(
             device, method, passes, sha_before, sha_after,
             "completed" if result["success"] else "failed",
-            time.time() - result.get("duration", 0), time.time()
+            start_ts, end_ts
         )
         
         # Sign reports
@@ -311,11 +319,11 @@ def initiate_wipe(device: str, method: str, passes: int = 1, force: bool = False
     except Exception as e:
         logger.error(f"Wipe operation failed: {e}")
         
-        # Update session with error
+        # Update session with error using enum and datetime
         update_wipe_session(
             session.id,
-            status="failed",
-            completed_at=time.time(),
+            status=WipeStatus.FAILED,
+            completed_at=datetime.utcnow(),
             error_message=str(e)
         )
         

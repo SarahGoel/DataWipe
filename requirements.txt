@@ -11,3 +11,4 @@ requests==2.32.3
 psutil==5.9.8
 python-dotenv==1.0.1
 typing-extensions==4.13.2
+PyQt5==5.15.11
