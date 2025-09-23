@@ -3,7 +3,7 @@ import sqlite3
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
-from models import Base, Device, WipeSession, WipeProgress, CryptographicKey, AuditLog
+from models import Base, Device, WipeSession, WipeProgress, CryptographicKey, AuditLog, DeviceType, WipeMethod as ModelWipeMethod
 from datetime import datetime
 import logging
 
@@ -59,10 +59,22 @@ def create_device(device_path, device_name, device_type="unknown", **kwargs):
     """Create a new device record"""
     db = get_db_session()
     try:
+        # Normalize device_type to enum
+        try:
+            if isinstance(device_type, DeviceType):
+                dt_enum = device_type
+            elif isinstance(device_type, str):
+                # Accept value like 'ssd', 'hdd', 'nvme', 'usb', 'unknown'
+                dt_enum = DeviceType(device_type.lower()) if device_type else DeviceType.UNKNOWN
+            else:
+                dt_enum = DeviceType.UNKNOWN
+        except Exception:
+            dt_enum = DeviceType.UNKNOWN
+
         device = Device(
             device_path=device_path,
             device_name=device_name,
-            device_type=device_type,
+            device_type=dt_enum,
             **kwargs
         )
         db.add(device)
@@ -102,9 +114,21 @@ def create_wipe_session(device_id, method, passes=1):
     """Create a new wipe session"""
     db = get_db_session()
     try:
+        # Normalize method to models.WipeMethod enum
+        try:
+            if isinstance(method, ModelWipeMethod):
+                method_enum = method
+            else:
+                # Accept service enum with .value or a raw string
+                method_value = getattr(method, "value", method)
+                method_enum = ModelWipeMethod(str(method_value))
+        except Exception:
+            # Default to SINGLE_PASS if unknown
+            method_enum = ModelWipeMethod.SINGLE_PASS
+
         session = WipeSession(
             device_id=device_id,
-            method=method,
+            method=method_enum,
             passes=passes
         )
         db.add(session)

@@ -215,14 +215,23 @@ def initiate_wipe(device: str, method: str, passes: int = 1, force: bool = False
     device_obj = get_device_by_path(device)
     if not device_obj:
         device_info = secure_wipe_service.get_device_info(device)
+        # Robust name and fields with fallbacks
+        device_name = device_info.get("model") or device_info.get("path") or device
+        if not device_name:
+            device_name = str(device)
+        device_type = device_info.get("type") or "unknown"
+        try:
+            size_bytes = int(device_info.get("size")) if device_info.get("size") is not None else None
+        except Exception:
+            size_bytes = None
         device_obj = create_device(
             device_path=device,
-            device_name=device_info.get("model", device.split("/")[-1]),
-            device_type=device_info.get("type", "unknown"),
-            size_bytes=device_info.get("size"),
+            device_name=device_name,
+            device_type=device_type,
+            size_bytes=size_bytes,
             model=device_info.get("model"),
             serial_number=device_info.get("serial"),
-            is_removable=device_info.get("is_removable", False)
+            is_removable=bool(device_info.get("is_removable", False))
         )
     
     if not device_obj:
