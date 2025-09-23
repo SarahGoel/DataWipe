@@ -111,9 +111,14 @@ export default function App() {
         // Start polling for progress
         pollProgress(payload.session_id);
       } else {
+        const postFormat = payload && payload.post_format ? payload.post_format : null;
         const apiError = (payload && payload.error) || (result && result.detail) || 'Wipe failed';
         setWipeError(apiError);
-        setWipeStatus('Failed');
+        if (postFormat && postFormat.attempted) {
+          setWipeStatus(`Format attempted=${postFormat.attempted}, formatted=${postFormat.formatted}, fs=${postFormat.filesystem || 'n/a'}`);
+        } else {
+          setWipeStatus('Failed');
+        }
       }
     } catch (error) {
       setWipeError(error.message || 'Request failed');

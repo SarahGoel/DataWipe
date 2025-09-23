@@ -4,7 +4,7 @@ from datetime import datetime
 import hashlib
 import platform
 import logging
-from typing import Dict, Any, List, Optional, Callable
+from typing import Dict, Any, List, Optional, Callable, Tuple
 from database import init_database, get_db_session, create_device, get_device_by_path, create_wipe_session, update_wipe_session, add_progress_update
 from services.secure_wipe import SecureWipeService, WipeMethod
 from services.wipe_methods import WipeMethods
@@ -188,6 +188,89 @@ def _sha256_head(device_path: str, head_bytes: int = 1024*1024) -> Optional[str]
         logger.error(f"Failed to get device hash: {e}")
         return None
 
+def _detect_original_filesystem(device_path: str) -> Optional[str]:
+    """Best-effort detection of original filesystem for a given device or volume.
+    - Windows: returns 'ntfs', 'fat32', 'exfat' for drive letters (e.g., D:\), None for PhysicalDrive.
+    - Linux/macOS: attempts to parse lsblk/diskutil output.
+    """
+    try:
+        import platform, re, subprocess, os
+        system = platform.system().lower()
+        if system == 'windows':
+            # If a drive letter was provided (D:\ or D:), query filesystem
+            mvol = re.match(r"^([a-zA-Z]):\\?", device_path)
+            if mvol:
+                drive = mvol.group(1)
+                ps = f"Get-Volume -DriveLetter {drive} | Select-Object -First 1 -ExpandProperty FileSystem"
+                result = subprocess.run(["powershell", "-NoProfile", "-Command", ps], capture_output=True, text=True, check=True)
+                fs = (result.stdout or '').strip().lower()
+                if fs:
+                    return {'ntfs':'ntfs','refs':'ntfs','fat32':'fat32','exfat':'exfat'}.get(fs, fs)
+                return None
+            # PhysicalDrive: cannot reliably detect; return None
+            return None
+        elif system == 'linux':
+            out = subprocess.run(["lsblk", "-no", "FSTYPE", device_path], capture_output=True, text=True)
+            fs = (out.stdout or '').strip().splitlines()
+            if fs and fs[0]:
+                return fs[0].lower()
+            return None
+        elif system == 'darwin':
+            out = subprocess.run(["diskutil", "info", device_path], capture_output=True, text=True)
+            for line in (out.stdout or '').splitlines():
+                if 'Type (Bundle):' in line:
+                    return line.split(':',1)[1].strip().lower()
+            return None
+    except Exception:
+        return None
+
+def _format_device_to_original(device_path: str, fs: Optional[str]) -> bool:
+    """Attempt to format the device/volume back to its original filesystem.
+    Returns True on success, False if skipped.
+    """
+    try:
+        import platform, re, subprocess
+        if not fs:
+            return False
+        system = platform.system().lower()
+        if system == 'windows':
+            # Drive letter formatting
+            mvol = re.match(r"^([a-zA-Z]):\\?", device_path)
+            if mvol:
+                drive = mvol.group(1)
+                fs_map = {'ntfs':'NTFS','fat32':'FAT32','exfat':'exFAT'}
+                target = fs_map.get(fs.lower(), 'exFAT')
+                ps = f"Format-Volume -DriveLetter {drive} -FileSystem {target} -Confirm:$false -Force"
+                subprocess.run(["powershell", "-NoProfile", "-Command", ps], check=True)
+                return True
+            # PhysicalDrive: use Clear-Disk path; requires creating a partition and formatting
+            mphys = re.search(r"PhysicalDrive(\d+)", device_path, re.IGNORECASE)
+            if mphys:
+                disk = mphys.group(1)
+                # Create single primary partition and format
+                ps = (
+                    f"$part = New-Partition -DiskNumber {disk} -UseMaximumSize -AssignDriveLetter; "
+                    f"Format-Volume -Partition $part -FileSystem exFAT -Confirm:$false -Force"
+                )
+                subprocess.run(["powershell", "-NoProfile", "-Command", ps], check=True)
+                return True
+            return False
+        elif system == 'linux':
+            # Create a partition and mkfs accordingly (requires privileges)
+            fs_map = {'ntfs':'ntfs','fat32':'vfat','exfat':'exfat'}
+            target = fs_map.get(fs.lower(), 'vfat')
+            # naive: mkfs on first partition if exists
+            subprocess.run(["sh", "-c", f"sudo mkfs.{target} -F 32 {device_path}1 || sudo mkfs.{target} {device_path}1"], check=False)
+            return True
+        elif system == 'darwin':
+            # diskutil eraseVolume
+            target = {'ntfs':'exfat','fat32':'ms-dos fat32','exfat':'exfat'}.get(fs.lower(), 'exfat')
+            subprocess.run(["diskutil", "eraseDisk", target, "USB", device_path], check=False)
+            return True
+        return False
+    except Exception:
+        return False
+
 def initiate_wipe(device: str, method: str, passes: int = 1, force: bool = False) -> Dict[str, Any]:
     """Initiate secure wipe operation with progress tracking"""
     
@@ -211,6 +294,9 @@ def initiate_wipe(device: str, method: str, passes: int = 1, force: bool = False
     
     wipe_method = method_map.get(method, WipeMethod.SINGLE_PASS)
     
+    # Detect original filesystem (best-effort, for post-wipe reformat)
+    original_fs = _detect_original_filesystem(device)
+
     # Get or create device record
     device_obj = get_device_by_path(device)
     if not device_obj:
@@ -281,6 +367,14 @@ def initiate_wipe(device: str, method: str, passes: int = 1, force: bool = False
             error_message=result.get("error")
         )
         
+        # Attempt post-wipe reformat to original filesystem (best-effort)
+        post_format = {"attempted": False, "formatted": False, "filesystem": original_fs or "", "error": None}
+        try:
+            reformatted = _format_device_to_original(device, original_fs)
+            post_format = {"attempted": True, "formatted": bool(reformatted), "filesystem": original_fs or "", "error": None if reformatted else "formatting skipped"}
+        except Exception as fmt_err:
+            post_format = {"attempted": True, "formatted": False, "filesystem": original_fs or "", "error": str(fmt_err)}
+
         # Generate reports
         end_ts = time.time()
         start_ts = end_ts - result.get("duration", 0)
@@ -322,7 +416,8 @@ def initiate_wipe(device: str, method: str, passes: int = 1, force: bool = False
             "duration": result.get("duration", 0),
             "sha_before": sha_before,
             "sha_after": sha_after,
-            "error": result.get("error")
+            "error": result.get("error"),
+            "post_format": post_format
         }
         
     except Exception as e:

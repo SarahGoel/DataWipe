@@ -53,6 +53,9 @@ class WipeSessionResponse(BaseModel):
 class VerifyRequest(BaseModel):
     file_path: str
     embedded_pdf: bool = False
+    # Optional: allow providing a third-party verification result payload
+    third_party_tool: Optional[str] = None
+    third_party_result: Optional[Dict[str, Any]] = None
 
 @router.get("/drives")
 def api_list_drives():
@@ -343,6 +346,13 @@ def api_verify_certificate(req: VerifyRequest):
 
         # Fallback: detached .sig/.p7s JSON/PDF verification
         result = verify_certificate(file_path)
+
+        # If third-party verification payload is provided, include it in the response
+        if req.third_party_tool and req.third_party_result is not None:
+            result["third_party"] = {
+                "tool": req.third_party_tool,
+                "result": req.third_party_result
+            }
         return result
     except HTTPException:
         raise
