@@ -96,7 +96,15 @@ def sign_report_with_openssl(pdf_path, private_key="keys/private.pem"):
     try:
         # Use the new certificate generator for signing
         certificate_generator._sign_pdf(pdf_path)
-        return f"{pdf_path}.sig"
+        # Prefer .p7s created by _sign_pdf
+        p7s_path = f"{pdf_path}.p7s"
+        if os.path.exists(p7s_path):
+            return p7s_path
+        # Fallback: if a .sig exists, return it
+        sig_path = f"{pdf_path}.sig"
+        if os.path.exists(sig_path):
+            return sig_path
+        return None
     except Exception as e:
         logger.error(f"Failed to sign report: {e}")
         return None

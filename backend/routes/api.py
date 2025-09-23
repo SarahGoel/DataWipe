@@ -269,11 +269,21 @@ def api_download_json_report(session_id: int):
     """Download JSON certificate for a session"""
     try:
         db = get_db_session()
+        # Eager load device to avoid lazy load outside session
         session = db.query(WipeSession).filter(WipeSession.id == session_id).first()
-        db.close()
-        
         if not session:
+            db.close()
             raise HTTPException(status_code=404, detail="Session not found")
+        # Access needed fields while session is open
+        device_path = session.device.device_path if session.device else "unknown"
+        method = session.method.value
+        passes = session.passes
+        sha_before = session.sha_before or ""
+        sha_after = session.sha_after or ""
+        status = session.status.value
+        started = session.started_at.timestamp() if session.started_at else 0
+        completed = session.completed_at.timestamp() if session.completed_at else 0
+        db.close()
         
         # Look for JSON report in reports directory
         reports_dir = Path("reports")
@@ -282,16 +292,7 @@ def api_download_json_report(session_id: int):
         if not json_files:
             # Generate JSON report if not exists
             from utils.report import generate_json_report
-            json_path = generate_json_report(
-                session.device.device_path if session.device else "unknown",
-                session.method.value,
-                session.passes,
-                session.sha_before or "",
-                session.sha_after or "",
-                session.status.value,
-                session.started_at.timestamp() if session.started_at else 0,
-                session.completed_at.timestamp() if session.completed_at else 0
-            )
+            json_path = generate_json_report(device_path, method, passes, sha_before, sha_after, status, started, completed)
             if not json_path or not os.path.exists(json_path):
                 raise HTTPException(status_code=404, detail="JSON report not found")
         else:
