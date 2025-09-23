@@ -2,6 +2,27 @@ $ErrorActionPreference = 'Stop'
 
 Write-Host "=== ZeroTrace Presentation Runner ===" -ForegroundColor Cyan
 
+# Ensure Administrator for device operations
+try {
+  $currentIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
+  $principal = New-Object Security.Principal.WindowsPrincipal($currentIdentity)
+  $isAdmin = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+} catch { $isAdmin = $false }
+
+if (-not $isAdmin) {
+  Write-Host "Requesting Administrator privileges..." -ForegroundColor Yellow
+  $psi = New-Object System.Diagnostics.ProcessStartInfo
+  $psi.FileName = (Get-Process -Id $PID).Path
+  $psi.Arguments = "-ExecutionPolicy Bypass -File `"$PSCommandPath`""
+  $psi.Verb = 'runas'
+  try {
+    [System.Diagnostics.Process]::Start($psi) | Out-Null
+    exit
+  } catch {
+    Write-Warning "Administrator elevation was cancelled. Device wipes will fail without admin."
+  }
+}
+
 # Determine repository root based on this script location
 $repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $repoRoot

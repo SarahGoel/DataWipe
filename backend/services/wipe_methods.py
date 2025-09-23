@@ -305,9 +305,11 @@ class WipeMethods:
                         "bs=1M", "status=progress", "conv=fsync"
                     ], check=True)
                 elif self.is_windows:
-                    # Windows: raw disk writes require Administrator. Prefer Clear-Disk for physical devices.
+                    # Windows: raw disk writes require Administrator. Prefer Clear-Disk/Clear-Volume.
                     import re, ctypes
-                    is_physical = device_path.startswith('\\\\.\\PhysicalDrive')
+                    lower_path = device_path.lower()
+                    is_physical = 'physicaldrive' in lower_path
+                    # Physical drive wipe using Clear-Disk
                     if is_physical:
                         try:
                             is_admin = bool(ctypes.windll.shell32.IsUserAnAdmin())  # type: ignore
@@ -315,7 +317,7 @@ class WipeMethods:
                             is_admin = False
                         if not is_admin:
                             raise Exception("Administrator privileges required for device wipe on Windows. Run PowerShell as Administrator.")
-                        m = re.match(r"^\\\\\\.\\\\PhysicalDrive(\d+)$", device_path)
+                        m = re.search(r"PhysicalDrive(\d+)", device_path, re.IGNORECASE)
                         if not m:
                             raise Exception("Unable to parse Windows PhysicalDrive number.")
                         disk_number = m.group(1)
@@ -323,6 +325,19 @@ class WipeMethods:
                         ps = f"Clear-Disk -Number {disk_number} -RemoveData -Confirm:$false -ErrorAction Stop"
                         subprocess.run(["powershell", "-NoProfile", "-Command", ps], check=True)
                     else:
+                        # If a drive letter like C: or D:\ was passed, clear the volume
+                        mvol = re.match(r"^([a-zA-Z]):\\?", device_path)
+                        if mvol:
+                            drive = mvol.group(1)
+                            try:
+                                is_admin = bool(ctypes.windll.shell32.IsUserAnAdmin())  # type: ignore
+                            except Exception:
+                                is_admin = False
+                            if not is_admin:
+                                raise Exception("Administrator privileges required for volume wipe on Windows. Run PowerShell as Administrator.")
+                            ps = f"Clear-Volume -DriveLetter {drive} -Force -Confirm:$false -ErrorAction Stop"
+                            subprocess.run(["powershell", "-NoProfile", "-Command", ps], check=True)
+                            continue
                         # Fallback for regular file paths on Windows
                         device_path_escaped = device_path.replace('\\', '\\\\')
                         cmd = f"""
