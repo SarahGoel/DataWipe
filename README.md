@@ -8,17 +8,22 @@
 
 ZeroTrace is a secure data wiping tool with a FastAPI backend and a modern React (Vite) frontend. It generates tamper‑proof wipe certificates and includes an Electron desktop shell for presentations.
 
-## ⚡ Quick Start (Presentation)
+## ⚡ Quick Start
 
-- One‑command runner (builds web, runs backend, opens browser):
+- Run from the repo root to install deps, build the web app, and start the API that serves the built UI at /:
 ```powershell
-cd C:\Users\Shikkha\ZeroTrace
-./run_presentation.ps1
+# Windows (PowerShell)
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+pushd frontend/web; npm install; npm run build; popd
+python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
 ```
-If PowerShell blocks scripts:
-```powershell
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-./run_presentation.ps1
+```bash
+# macOS/Linux (bash)
+python3 -m pip install --upgrade pip
+python3 -m pip install -r requirements.txt
+pushd frontend/web && npm install && npm run build && popd
+python3 -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
 ```
 App: http://127.0.0.1:8000 • API docs: http://127.0.0.1:8000/docs
 
@@ -37,11 +42,11 @@ Then open Certificates in the app.
 cd backend
 python -m pip install -r ..\requirements.txt
 ```
-- Frontend build:
+- Frontend build (Vite ESM config at `frontend/web/vite.config.mjs`):
 ```powershell
 cd frontend\web
-"C:\Program Files\nodejs\npm.cmd" install
-"C:\Program Files\nodejs\npm.cmd" run build
+npm install
+npm run build
 ```
 - Run backend (serves built web at /):
 ```powershell
@@ -52,8 +57,8 @@ python -m uvicorn main:app --host 127.0.0.1 --port 8000 --reload
 - Electron desktop window (dev, optional):
 ```powershell
 cd frontend\web
-"C:\Program Files\nodejs\npm.cmd" run dev
-"C:\Program Files\nodejs\npm.cmd" run electron
+npm run dev
+npm run electron
 ```
 
 ---
@@ -95,8 +100,17 @@ cd frontend\web
 
 ### Prerequisites
 
-- None. The guide below installs everything for you on Windows, macOS, and Linux.
-  - For device wiping, run shells as Administrator (Windows) or with sudo (Linux/macOS).
+- Python 3.9+ and Node.js 18+ (LTS recommended). If missing, install via:
+  - Windows: `winget install -e --id Python.Python.3` and `winget install -e --id OpenJS.NodeJS.LTS`
+  - macOS: `brew install python node`
+  - Ubuntu/Debian: `sudo apt update && sudo apt install -y python3 python3-pip nodejs npm`
+  - Fedora: `sudo dnf install -y python3 python3-pip nodejs`
+  - Arch: `sudo pacman -S --noconfirm python nodejs npm`
+
+Notes for secure wipe tooling (optional, OS-native binaries):
+- Linux: `sudo apt install -y hdparm nvme-cli` (or distro equivalents)
+- macOS: uses system tools; run Terminal as admin and unmount target disks if needed
+- Windows: run PowerShell as Administrator for device access
 
 ### Quick Start
 
@@ -186,6 +200,12 @@ cd frontend/web
 npm install
 npm run dev
 ```
+
+## ⚙️ Notes on Frontend Build
+
+- The project uses Vite with an ESM config file: `frontend/web/vite.config.mjs`.
+- If you see an error like "ESM file cannot be loaded by require" during build, ensure Node.js 18+ and run `npm install` before `npm run build` inside `frontend/web`.
+- The presentation script `run_presentation.ps1` runs `npm install`, builds the frontend, verifies `dist/index.html`, then starts the backend which serves the built UI at `/`.
 
 ## 🛠️ Tech Stack
 

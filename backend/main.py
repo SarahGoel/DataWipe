@@ -41,28 +41,45 @@ if not os.path.exists("reports"):
     os.makedirs("reports")
 app.mount("/reports", StaticFiles(directory="reports"), name="reports")
 
-# Serve built web frontend (Vite) from FastAPI for a one-command run
+# Serve built web frontend (Vite) from FastAPI (dynamic check so it's resilient)
 FRONTEND_DIST = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'frontend', 'web', 'dist'))
-if os.path.isdir(FRONTEND_DIST):
-    index_path = os.path.join(FRONTEND_DIST, "index.html")
-    assets_dir = os.path.join(FRONTEND_DIST, "assets")
-    if os.path.isdir(assets_dir):
-        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+index_path = os.path.join(FRONTEND_DIST, "index.html")
+assets_dir = os.path.join(FRONTEND_DIST, "assets")
+FRONTEND_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'frontend', 'web'))
 
-    @app.get("/", include_in_schema=False)
-    async def serve_root():
-        if os.path.exists(index_path):
-            return FileResponse(index_path)
-        return {"status": "frontend build not found"}
+# Mount assets even if not yet present; they'll appear after build
+app.mount("/assets", StaticFiles(directory=assets_dir, check_dir=False), name="assets")
 
-    @app.get("/{full_path:path}", include_in_schema=False)
-    async def spa_catch_all(full_path: str):
-        # Let API and reports routes be handled by their routers
-        if full_path.startswith("api/") or full_path.startswith("reports/"):
-            return {"detail": "Not Found"}
+def _try_build_frontend() -> None:
+    try:
         if os.path.exists(index_path):
-            return FileResponse(index_path)
-        return {"status": "frontend build not found"}
+            return
+        import subprocess
+        # install then build
+        subprocess.run(["npm", "install"], cwd=FRONTEND_SRC, check=True)
+        subprocess.run(["npm", "run", "build"], cwd=FRONTEND_SRC, check=True)
+    except Exception as e:
+        logger.warning(f"Frontend build attempt failed: {e}")
+
+@app.get("/", include_in_schema=False)
+async def serve_root():
+    if not os.path.exists(index_path):
+        _try_build_frontend()
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    # Friendly message instead of 404 when frontend isn't built yet
+    return {"status": "frontend build not found", "hint": "Run: npm run build in frontend/web"}
+
+@app.get("/{full_path:path}", include_in_schema=False)
+async def spa_catch_all(full_path: str):
+    # Let API and reports routes be handled by their routers
+    if full_path.startswith("api/") or full_path.startswith("reports/"):
+        return {"detail": "Not Found"}
+    if not os.path.exists(index_path):
+        _try_build_frontend()
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    return {"status": "frontend build not found", "hint": "Run: npm run build in frontend/web"}
 
 @app.on_event("startup")
 async def startup_event():
