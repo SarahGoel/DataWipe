@@ -281,7 +281,20 @@ class CertificateGenerator:
                 ('GRID', (0, 0), (-1, -1), 1, HexColor('#E2E8F0'))
             ]))
             story.append(verification_table)
-            story.append(Spacer(1, 30))
+            story.append(Spacer(1, 12))
+
+            # QR Code linking to verification payload (local proof URL or embedded JSON reference)
+            try:
+                qr_payload = self._build_qr_payload(wipe_data)
+                qr_img_path = self._generate_qr_image(qr_payload)
+                story.append(Paragraph("SCAN TO VERIFY", header_style))
+                story.append(Paragraph("QR encodes the certificate ID and hashes for validation.", normal_style))
+                story.append(Spacer(1, 6))
+                story.append(Image(qr_img_path, width=1.8*inch, height=1.8*inch))
+                story.append(Spacer(1, 12))
+            except Exception as e:
+                logger.warning(f"Failed to add QR code: {e}")
+            story.append(Spacer(1, 18))
             
             # Digital Signature Section
             story.append(Paragraph("DIGITAL SIGNATURE", header_style))
@@ -416,6 +429,31 @@ class CertificateGenerator:
         """Generate signature hash for the certificate"""
         data_string = f"{wipe_data.get('device_path', '')}{wipe_data.get('method', '')}{wipe_data.get('sha_after', '')}"
         return hashlib.sha256(data_string.encode()).hexdigest()
+
+    def _build_qr_payload(self, wipe_data: Dict[str, Any]) -> str:
+        """Build a compact JSON string to encode in the QR for quick verification."""
+        payload = {
+            "id": self._generate_certificate_id(wipe_data),
+            "device": wipe_data.get('device_path'),
+            "method": wipe_data.get('method'),
+            "sha_before": wipe_data.get('sha_before'),
+            "sha_after": wipe_data.get('sha_after'),
+            "issued_at": datetime.now(timezone.utc).isoformat()
+        }
+        return json.dumps(payload, separators=(',', ':'), ensure_ascii=False)
+
+    def _generate_qr_image(self, data: str) -> str:
+        """Generate a QR code PNG file for the provided data and return its path."""
+        try:
+            import qrcode
+            reports_dir = Path("reports")
+            reports_dir.mkdir(exist_ok=True)
+            qr_path = reports_dir / f"qr_{hashlib.sha256(data.encode('utf-8')).hexdigest()[:10]}.png"
+            img = qrcode.make(data)
+            img.save(str(qr_path))
+            return str(qr_path)
+        except Exception as e:
+            raise
     
     def _get_public_key_fingerprint(self) -> str:
         """Get public key fingerprint"""
