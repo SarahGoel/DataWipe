@@ -98,18 +98,25 @@ export default function App() {
         })
       });
 
-      const result = await response.json();
-      
-      if (result.result.success) {
-        setCurrentSession(result.result.session_id);
+      let result = null;
+      try {
+        result = await response.json();
+      } catch (_) {
+        result = null;
+      }
+
+      const payload = result && result.result ? result.result : null;
+      if (response.ok && payload && payload.success) {
+        setCurrentSession(payload.session_id);
         // Start polling for progress
-        pollProgress(result.result.session_id);
+        pollProgress(payload.session_id);
       } else {
-        setWipeError(result.result.error || 'Wipe failed');
+        const apiError = (payload && payload.error) || (result && result.detail) || 'Wipe failed';
+        setWipeError(apiError);
         setWipeStatus('Failed');
       }
     } catch (error) {
-      setWipeError(error.message);
+      setWipeError(error.message || 'Request failed');
       setWipeStatus('Failed');
     } finally {
       setIsLoading(false);
