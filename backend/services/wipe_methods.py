@@ -305,15 +305,34 @@ class WipeMethods:
                         "bs=1M", "status=progress", "conv=fsync"
                     ], check=True)
                 elif self.is_windows:
-                    # Windows implementation using PowerShell
-                    device_path_escaped = device_path.replace('\\', '\\\\')
-                    cmd = f"""
-                    $fs = [System.IO.File]::OpenWrite('{device_path_escaped}')
-                    $buffer = New-Object byte[] 1048576
-                    $fs.Write($buffer, 0, $buffer.Length)
-                    $fs.Close()
-                    """
-                    subprocess.run(["powershell", "-Command", cmd], check=True)
+                    # Windows: raw disk writes require Administrator. Prefer Clear-Disk for physical devices.
+                    import re, ctypes
+                    is_physical = device_path.startswith('\\\\.\\PhysicalDrive')
+                    if is_physical:
+                        try:
+                            is_admin = bool(ctypes.windll.shell32.IsUserAnAdmin())  # type: ignore
+                        except Exception:
+                            is_admin = False
+                        if not is_admin:
+                            raise Exception("Administrator privileges required for device wipe on Windows. Run PowerShell as Administrator.")
+                        m = re.match(r"^\\\\\\.\\\\PhysicalDrive(\d+)$", device_path)
+                        if not m:
+                            raise Exception("Unable to parse Windows PhysicalDrive number.")
+                        disk_number = m.group(1)
+                        # Use Clear-Disk to remove data (requires admin)
+                        ps = f"Clear-Disk -Number {disk_number} -RemoveData -Confirm:$false -ErrorAction Stop"
+                        subprocess.run(["powershell", "-NoProfile", "-Command", ps], check=True)
+                    else:
+                        # Fallback for regular file paths on Windows
+                        device_path_escaped = device_path.replace('\\', '\\\\')
+                        cmd = f"""
+                        $fs = [System.IO.File]::Open('{device_path_escaped}', [System.IO.FileMode]::Open, [System.IO.FileAccess]::ReadWrite)
+                        $buffer = New-Object byte[] 1048576
+                        $fs.Write($buffer, 0, $buffer.Length)
+                        $fs.Flush()
+                        $fs.Close()
+                        """
+                        subprocess.run(["powershell", "-NoProfile", "-Command", cmd], check=True)
         except subprocess.CalledProcessError as e:
             raise Exception(f"Secure overwrite failed: {e}")
     

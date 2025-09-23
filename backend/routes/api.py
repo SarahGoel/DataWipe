@@ -92,7 +92,8 @@ def api_wipe(req: WipeRequest, background_tasks: BackgroundTasks):
         logger.error(f"Wipe operation failed: {e}")
         log_audit_event("wipe_failed", "device", req.device, 
                        details=f"error={str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        # Return a structured error that the frontend can display
+        return {"result": {"success": False, "error": str(e)}}
 
 @router.post("/wipe-file")
 def api_wipe_file(req: FileWipeRequest):

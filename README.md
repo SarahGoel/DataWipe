@@ -110,7 +110,7 @@ npm run electron
 Notes for secure wipe tooling (optional, OS-native binaries):
 - Linux: `sudo apt install -y hdparm nvme-cli` (or distro equivalents)
 - macOS: uses system tools; run Terminal as admin and unmount target disks if needed
-- Windows: run PowerShell as Administrator for device access
+- Windows: run PowerShell as Administrator for device access. For physical drives, the app may use `Clear-Disk -Number <n> -RemoveData -Confirm:$false` under the hood, which requires admin.
 
 ### Quick Start
 
