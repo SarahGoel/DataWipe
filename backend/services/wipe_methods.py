@@ -115,22 +115,74 @@ class WipeMethods:
         if not self._verify_zeroed(device_path):
             raise Exception("Clear verification failed")
         
-        # Step 3: Purge (crypto erase if available, otherwise additional overwrite)
+        # Step 3: Purge (prefer sanitize/crypto erase on SSD/NVMe; fallback overwrite; try discard)
         if progress_callback:
             progress_callback(80, "Purging device...")
         
         try:
-            # Try crypto erase first
-            self.crypto_erase(device_path, "unknown", None)
+            # Detect device type best-effort
+            device_type = self._detect_device_type_best_effort(device_path)
+            # Try crypto/sanitize erase first
+            self.crypto_erase(device_path, device_type, None)
             if progress_callback:
                 progress_callback(100, "NIST 800-88 wipe completed (crypto erase)")
         except:
             # Fallback to additional overwrite
-            self._secure_overwrite(device_path, 1, progress_callback, offset=80, max_progress=100)
+            self._secure_overwrite(device_path, 1, progress_callback, offset=80, max_progress=95)
+            # Best-effort discard/TRIM for SSDs
+            try:
+                if device_type in ("ssd", "nvme"):
+                    if progress_callback:
+                        progress_callback(96, "Attempting discard/TRIM...")
+                    self._try_discard(device_path)
+            except Exception:
+                pass
             if progress_callback:
                 progress_callback(100, "NIST 800-88 wipe completed (overwrite)")
         
         return {"method": "nist_800_88", "success": True}
+
+    def _detect_device_type_best_effort(self, device_path: str) -> str:
+        """Lightweight device type detection without cross-service dependency."""
+        try:
+            if self.is_linux:
+                if "nvme" in device_path:
+                    return "nvme"
+                out = subprocess.run(["lsblk", "-d", "-o", "ROTA", device_path], capture_output=True, text=True)
+                if out.returncode == 0:
+                    lines = (out.stdout or "").strip().splitlines()
+                    if lines:
+                        rota = lines[-1].strip()
+                        return "ssd" if rota == "0" else "hdd"
+            elif self.is_macos:
+                if "nvme" in device_path.lower():
+                    return "nvme"
+                info = subprocess.run(["diskutil", "info", device_path], capture_output=True, text=True)
+                if info.returncode == 0 and "Solid State" in (info.stdout or ""):
+                    return "ssd"
+            elif self.is_windows:
+                if "physicaldrive" in device_path.lower():
+                    # Unable to reliably detect here; assume ssd unknown
+                    return "unknown"
+        except Exception:
+            pass
+        return "unknown"
+
+    def _try_discard(self, device_path: str) -> None:
+        """Best-effort discard/trim to inform SSD/NVMe the blocks are unused."""
+        try:
+            if self.is_linux:
+                # blkdiscard may require exclusive access
+                subprocess.run(["blkdiscard", "-f", device_path], check=False)
+            elif self.is_macos:
+                # macOS performs TRIM internally on erase; no direct tool commonly available
+                pass
+            elif self.is_windows:
+                # Windows TRIM is FS-level; for raw device there is no simple direct call here
+                pass
+        except Exception:
+            # best-effort only
+            pass
     
     def dod_5220_22_m_wipe(self, device_path: str, passes: int, 
                           progress_callback: Optional[Callable] = None) -> Dict[str, Any]:
@@ -290,64 +342,52 @@ class WipeMethods:
     def _secure_overwrite(self, device_path: str, passes: int, 
                          progress_callback: Optional[Callable] = None,
                          offset: int = 0, max_progress: int = 100) -> None:
-        """Secure overwrite using dd"""
+        """Secure overwrite by streaming zeros across the entire target."""
         try:
+            import ctypes, re
+            chunk_size = 16 * 1024 * 1024
+            zero_chunk = b"\x00" * chunk_size
             for pass_num in range(passes):
                 if progress_callback:
                     progress_callback(
                         offset + (pass_num * (max_progress - offset) // passes),
                         f"Overwrite pass {pass_num + 1}/{passes}..."
                     )
-                
-                if self.is_linux or self.is_macos:
-                    subprocess.run([
-                        "dd", f"if=/dev/zero", f"of={device_path}",
-                        "bs=1M", "status=progress", "conv=fsync"
-                    ], check=True)
-                elif self.is_windows:
-                    # Windows: raw disk writes require Administrator. Prefer Clear-Disk/Clear-Volume.
-                    import re, ctypes
+                if self.is_windows:
                     lower_path = device_path.lower()
                     is_physical = 'physicaldrive' in lower_path
-                    # Physical drive wipe using Clear-Disk
+                    try:
+                        is_admin = bool(ctypes.windll.shell32.IsUserAnAdmin())  # type: ignore
+                    except Exception:
+                        is_admin = False
+                    if not is_admin:
+                        raise Exception("Administrator privileges are required on Windows.")
                     if is_physical:
-                        try:
-                            is_admin = bool(ctypes.windll.shell32.IsUserAnAdmin())  # type: ignore
-                        except Exception:
-                            is_admin = False
-                        if not is_admin:
-                            raise Exception("Administrator privileges required for device wipe on Windows. Run PowerShell as Administrator.")
+                        # Use DiskPart 'clean all' to write zeros to entire disk
                         m = re.search(r"PhysicalDrive(\d+)", device_path, re.IGNORECASE)
                         if not m:
                             raise Exception("Unable to parse Windows PhysicalDrive number.")
                         disk_number = m.group(1)
-                        # Use Clear-Disk to remove data (requires admin)
-                        ps = f"Clear-Disk -Number {disk_number} -RemoveData -Confirm:$false -ErrorAction Stop"
-                        subprocess.run(["powershell", "-NoProfile", "-Command", ps], check=True)
+                        script = f"select disk {disk_number}\nclean all\n"
+                        subprocess.run([
+                            "powershell", "-NoProfile", "-Command",
+                            f"$tmp=[System.IO.Path]::GetTempFileName(); Set-Content -Path $tmp -Value @'\n{script}\n'@; diskpart /s $tmp | Out-Null; Remove-Item $tmp -Force"
+                        ], check=True)
                     else:
-                        # If a drive letter like C: or D:\ was passed, clear the volume
-                        mvol = re.match(r"^([a-zA-Z]):\\?", device_path)
-                        if mvol:
-                            drive = mvol.group(1)
+                        # Reject drive-letter/volume path to avoid partial clearing
+                        raise Exception("On Windows, provide \\ \\.\\PhysicalDriveN for full-device secure wipe.")
+                else:
+                    # POSIX: stream zeros until EOF
+                    with open(device_path, 'wb', buffering=0) as f:
+                        while True:
                             try:
-                                is_admin = bool(ctypes.windll.shell32.IsUserAnAdmin())  # type: ignore
-                            except Exception:
-                                is_admin = False
-                            if not is_admin:
-                                raise Exception("Administrator privileges required for volume wipe on Windows. Run PowerShell as Administrator.")
-                            ps = f"Clear-Volume -DriveLetter {drive} -Force -Confirm:$false -ErrorAction Stop"
-                            subprocess.run(["powershell", "-NoProfile", "-Command", ps], check=True)
-                            continue
-                        # Fallback for regular file paths on Windows
-                        device_path_escaped = device_path.replace('\\', '\\\\')
-                        cmd = f"""
-                        $fs = [System.IO.File]::Open('{device_path_escaped}', [System.IO.FileMode]::Open, [System.IO.FileAccess]::ReadWrite)
-                        $buffer = New-Object byte[] 1048576
-                        $fs.Write($buffer, 0, $buffer.Length)
-                        $fs.Flush()
-                        $fs.Close()
-                        """
-                        subprocess.run(["powershell", "-NoProfile", "-Command", cmd], check=True)
+                                written = f.write(zero_chunk)
+                                if not written:
+                                    break
+                                f.flush()
+                                os.fsync(f.fileno())
+                            except OSError:
+                                break
         except subprocess.CalledProcessError as e:
             raise Exception(f"Secure overwrite failed: {e}")
     
@@ -367,88 +407,100 @@ class WipeMethods:
     
     def _write_random_data(self, device_path: str, progress_callback: Optional[Callable] = None,
                           offset: int = 0, max_progress: int = 100) -> None:
-        """Write random data to device"""
+        """Write random data across the entire target by streaming chunks."""
         try:
-            if self.is_linux or self.is_macos:
-                subprocess.run([
-                    "dd", f"if=/dev/urandom", f"of={device_path}",
-                    "bs=1M", "status=progress", "conv=fsync"
-                ], check=True)
-            elif self.is_windows:
-                # Windows implementation
+            chunk_size = 16 * 1024 * 1024
+            if self.is_windows:
                 device_path_escaped = device_path.replace('\\', '\\\\')
-                cmd = f"""
-                $fs = [System.IO.File]::OpenWrite('{device_path_escaped}')
-                $rng = New-Object System.Security.Cryptography.RNGCryptoServiceProvider
-                $buffer = New-Object byte[] 1048576
-                $rng.GetBytes($buffer)
-                $fs.Write($buffer, 0, $buffer.Length)
-                $fs.Close()
-                """
-                subprocess.run(["powershell", "-Command", cmd], check=True)
+                cmd = (
+                    "$fs = [System.IO.File]::Open('{path}', [System.IO.FileMode]::OpenOrCreate, [System.IO.FileAccess]::ReadWrite)\n"
+                    "$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()\n"
+                    "$buffer = New-Object byte[] {size}\n"
+                    "while ($true) {{\n"
+                    "  $rng.GetBytes($buffer)\n"
+                    "  try {{ $fs.Write($buffer, 0, $buffer.Length) }} catch {{ break }}\n"
+                    "  $fs.Flush(); $fs.Flush(true)\n"
+                    "}}\n"
+                    "$fs.Close()\n"
+                ).format(path=device_path_escaped, size=chunk_size)
+                subprocess.run(["powershell", "-NoProfile", "-Command", cmd], check=True)
+            else:
+                with open(device_path, 'wb', buffering=0) as f:
+                    while True:
+                        data = os.urandom(chunk_size)
+                        try:
+                            written = f.write(data)
+                            if not written:
+                                break
+                            f.flush()
+                            os.fsync(f.fileno())
+                        except OSError:
+                            break
         except subprocess.CalledProcessError as e:
             raise Exception(f"Random data write failed: {e}")
     
     def _write_specific_pattern(self, device_path: str, pattern: bytes,
                                progress_callback: Optional[Callable] = None,
                                offset: int = 0, max_progress: int = 100) -> None:
-        """Write specific pattern to device"""
+        """Write specific pattern across the entire target by streaming repeated buffers."""
         try:
-            if self.is_linux or self.is_macos:
-                # Create a temporary file with the pattern
-                temp_file = f"/tmp/pattern_{int(time.time())}"
-                with open(temp_file, "wb") as f:
-                    # Write pattern repeatedly to fill 1MB
-                    pattern_size = len(pattern)
-                    for _ in range(1024 * 1024 // pattern_size):
-                        f.write(pattern)
-                
-                subprocess.run([
-                    "dd", f"if={temp_file}", f"of={device_path}",
-                    "bs=1M", "status=progress", "conv=fsync"
-                ], check=True)
-                
-                # Clean up
-                os.remove(temp_file)
-            elif self.is_windows:
-                # Windows implementation
+            chunk_size = 16 * 1024 * 1024
+            if len(pattern) == 0:
+                raise Exception("Pattern must be non-empty")
+            repeats = (chunk_size // len(pattern)) + 1
+            chunk = (pattern * repeats)[:chunk_size]
+            if self.is_windows:
                 device_path_escaped = device_path.replace('\\', '\\\\')
-                pattern_hex = pattern.hex()
-                cmd = f"""
-                $fs = [System.IO.File]::OpenWrite('{device_path_escaped}')
-                $pattern = [System.Convert]::FromHexString('{pattern_hex}')
-                $buffer = New-Object byte[] 1048576
-                for ($i = 0; $i -lt $buffer.Length; $i += $pattern.Length) {{
-                    [Array]::Copy($pattern, 0, $buffer, $i, [Math]::Min($pattern.Length, $buffer.Length - $i))
-                }}
-                $fs.Write($buffer, 0, $buffer.Length)
-                $fs.Close()
-                """
-                subprocess.run(["powershell", "-Command", cmd], check=True)
+                pattern_hex = chunk.hex()
+                cmd = (
+                    "$fs = [System.IO.File]::Open('{path}', [System.IO.FileMode]::OpenOrCreate, [System.IO.FileAccess]::ReadWrite)\n"
+                    "$buffer = [System.Convert]::FromHexString('{hex}')\n"
+                    "while ($true) {{\n"
+                    "  try {{ $fs.Write($buffer, 0, $buffer.Length) }} catch {{ break }}\n"
+                    "  $fs.Flush(); $fs.Flush(true)\n"
+                    "}}\n"
+                    "$fs.Close()\n"
+                ).format(path=device_path_escaped, hex=pattern_hex)
+                subprocess.run(["powershell", "-NoProfile", "-Command", cmd], check=True)
+            else:
+                with open(device_path, 'wb', buffering=0) as f:
+                    while True:
+                        try:
+                            written = f.write(chunk)
+                            if not written:
+                                break
+                            f.flush()
+                            os.fsync(f.fileno())
+                        except OSError:
+                            break
         except subprocess.CalledProcessError as e:
             raise Exception(f"Pattern write failed: {e}")
     
     def _verify_zeroed(self, device_path: str) -> bool:
-        """Verify that device is zeroed"""
+        """Verify multiple sampled regions are zeroed (head, middle, tail)."""
         try:
-            if self.is_linux or self.is_macos:
-                result = subprocess.run([
-                    "dd", f"if={device_path}", "bs=1M", "count=1"
-                ], capture_output=True, check=True)
-                return all(b == 0 for b in result.stdout)
-            elif self.is_windows:
-                # Windows verification
-                device_path_escaped = device_path.replace('\\', '\\\\')
-                cmd = f"""
-                $fs = [System.IO.File]::OpenRead('{device_path_escaped}')
-                $buffer = New-Object byte[] 1048576
-                $fs.Read($buffer, 0, $buffer.Length)
-                $fs.Close()
-                ($buffer | Where-Object {{ $_ -ne 0 }}).Count -eq 0
-                """
-                result = subprocess.run(["powershell", "-Command", cmd], 
-                                      capture_output=True, text=True, check=True)
-                return result.stdout.strip() == "True"
+            sample_size = 1024 * 1024
+            file_size = None
+            try:
+                file_size = os.path.getsize(device_path)
+            except Exception:
+                file_size = None
+            def _check_region(offset_bytes: int) -> bool:
+                try:
+                    with open(device_path, 'rb') as f:
+                        if offset_bytes > 0:
+                            f.seek(offset_bytes)
+                        data = f.read(sample_size)
+                        if not data:
+                            return True
+                        return all(b == 0 for b in data)
+                except Exception:
+                    return False
+            offsets = [0]
+            if file_size and file_size > sample_size * 2:
+                offsets.append(max(0, file_size // 2))
+                offsets.append(max(0, file_size - sample_size))
+            return all(_check_region(o) for o in offsets)
         except Exception as e:
             logger.error(f"Verification failed: {e}")
             return False
